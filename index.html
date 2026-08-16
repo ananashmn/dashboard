@@ -1221,19 +1221,38 @@ async function connectToWebhook(){
           'ngrok-skip-browser-warning': 'true'
       }
     });
-    if(!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-    const rows = Array.isArray(json) ? json : (json.data || json.rows || null);
-    if(!Array.isArray(rows) || rows.length===0) throw new Error('Réponse inattendue (tableau vide ou format invalide).');
-    DATA = rows.map(r => ({exception_decision:null, ...r}));
+
+    const rawRows = Array.isArray(json)
+      ? json
+      : (json.data || json.rows || []);
+
+    // Remove empty objects returned by n8n when the table has no rows
+    const rows = rawRows.filter(r =>
+      r &&
+      typeof r === 'object' &&
+      Object.keys(r).length > 0 &&
+      r.po_number
+    );
+
+    DATA = rows.map(r => ({
+      exception_decision: null,
+      ...r
+    }));
+
     USING_LIVE = true;
+
     updateSourcePill();
     populateFilterOptions();
     renderKpis();
     renderTable();
     renderExceptions();
+    
+    // Load AI recommendations EVEN IF there are currently zero POs
     await loadRecommendations();
-    statusEl.innerHTML = `<div class="status-msg ok">Connecté — ${rows.length} bons de commande chargés.</div>`;
+    
+    statusEl.innerHTML =
+      `<div class="status-msg ok">Connecté — ${rows.length} bons de commande chargés.</div>`;
   }catch(err){
     statusEl.innerHTML = `<div class="status-msg err">Échec de la connexion : ${err.message}. Vérifiez l'URL, le réseau et la configuration CORS du webhook.</div>`;
   }
