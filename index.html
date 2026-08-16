@@ -1762,7 +1762,9 @@ function renderApprovals(){
   tabCount.textContent = pending;
   tabCount.classList.toggle('alert', pending>0);
 
-  const isManager = currentUser.role === 'manager';
+  const canModify =
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MANAGER';
   const list = $('approvalsList');
   if(APPROVAL_BATCH.length===0){
     list.innerHTML = `<div class="empty-state"><p>Aucune recommandation en attente.</p></div>`;
@@ -1783,7 +1785,7 @@ function renderApprovals(){
         </div>
         <div class="reason-box">${a.reason}</div>
       </div>
-      ${isManager ? `
+      ${canModify ? `
       <div class="decision-select">
         <select data-idx="${i}" class="appr-dropdown ${a.decision?('dec-'+a.decision):''}">
           <option value="" ${!a.decision?'selected':''}>En attente…</option>
@@ -1793,13 +1795,13 @@ function renderApprovals(){
       </div>` : `
       <div><span class="badge b-PENDING">En attente</span></div>`}
     </div>
-  `).join('') + (isManager ? `
+  `).join('') + (canModify ? `
     <div class="list-foot">
       <span id="approvalProgress"></span>
       <button class="btn-primary" id="submitDecisionsBtn">Envoyer les décisions</button>
     </div>` : '');
 
-  if(isManager){
+  if(canModify){
     document.querySelectorAll('.appr-dropdown').forEach(sel=>{
       sel.addEventListener('change', function(){
         APPROVAL_BATCH[this.dataset.idx].decision = this.value || null;
