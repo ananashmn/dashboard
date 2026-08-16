@@ -593,7 +593,12 @@
     <button class="icon-btn" id="refreshBtn" title="Actualiser">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path></svg>
     </button>
-    <button class="icon-btn" id="settingsBtn" title="Connecter à n8n">
+    <button
+      class="icon-btn"
+      id="settingsBtn"
+      title="Connecter à n8n"
+      style="display:none;"
+    >
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
     </button>
     <div class="user-chip">
@@ -769,6 +774,8 @@ if (savedUser) {
 }
 
 const AUTH_BASE =
+  "https://juggling-sharply-body.ngrok-free.dev/webhook";
+const N8N_BASE =
   "https://juggling-sharply-body.ngrok-free.dev/webhook";
 
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
@@ -1039,6 +1046,9 @@ function enterApp() {
   applyRoleVisibility();
 
   init();
+
+  // Automatic connection to n8n
+  connectToWebhook();
   
   if (currentUser.role === 'ADMIN') {
     loadAdminUsers();
@@ -1336,18 +1346,8 @@ function closePanel(){
 /* ============ Approvals (AI supplier recommendations) ============ */
 
 async function loadRecommendations() {
-  const poStatusUrl = $('webhookUrl').value.trim();
-
-  if (!poStatusUrl) {
-    APPROVAL_BATCH = [];
-    renderApprovals();
-    return;
-  }
-
-  const recommendationsUrl = poStatusUrl.replace(
-    /\/po-status\/?$/,
-    '/procurement-recommendations'
-  );
+  const recommendationsUrl =
+    `${N8N_BASE}/procurement-recommendations`;
 
   try {
     const res = await fetch(recommendationsUrl, {
@@ -1450,7 +1450,6 @@ function renderAdminUsers() {
   }
 
   if (!ADMIN_USERS.length) {
-
     body.innerHTML = '';
     empty.style.display = 'block';
     return;
@@ -1458,64 +1457,196 @@ function renderAdminUsers() {
 
   empty.style.display = 'none';
 
-  body.innerHTML = ADMIN_USERS.map(u => `
 
+  // Separate new signup requests from existing users
+  const pendingUsers = ADMIN_USERS.filter(
+    u => u.status === 'PENDING'
+  );
+
+  const existingUsers = ADMIN_USERS.filter(
+    u => u.status !== 'PENDING'
+  );
+
+
+  function userRow(u) {
+
+    return `
+      <tr>
+
+        <td>${u.name || '—'}</td>
+
+        <td>${u.email || '—'}</td>
+
+        <td>
+          <select
+            class="filter"
+            id="role-${u.user_id}"
+          >
+
+            <option
+              value="VIEWER"
+              ${u.role === 'VIEWER' ? 'selected' : ''}
+            >
+              VIEWER
+            </option>
+
+            <option
+              value="MANAGER"
+              ${u.role === 'MANAGER' ? 'selected' : ''}
+            >
+              MANAGER
+            </option>
+
+            <option
+              value="ADMIN"
+              ${u.role === 'ADMIN' ? 'selected' : ''}
+            >
+              ADMIN
+            </option>
+
+          </select>
+        </td>
+
+        <td>
+          <select
+            class="filter"
+            id="status-${u.user_id}"
+          >
+
+            <option
+              value="PENDING"
+              ${u.status === 'PENDING' ? 'selected' : ''}
+            >
+              PENDING
+            </option>
+
+            <option
+              value="ACTIVE"
+              ${u.status === 'ACTIVE' ? 'selected' : ''}
+            >
+              ACTIVE
+            </option>
+
+            <option
+              value="DISABLED"
+              ${u.status === 'DISABLED' ? 'selected' : ''}
+            >
+              DISABLED
+            </option>
+
+          </select>
+        </td>
+
+        <td>
+          <button
+            class="btn-primary"
+            onclick="saveAdminUser('${u.user_id}')"
+          >
+            Enregistrer
+          </button>
+        </td>
+
+      </tr>
+    `;
+  }
+
+
+  let html = '';
+
+
+  // ----- PENDING REQUESTS -----
+
+  html += `
     <tr>
-
-      <td>${u.name || '—'}</td>
-
-      <td>${u.email || '—'}</td>
-
-      <td>
-        <select
-          class="filter"
-          id="role-${u.user_id}"
-        >
-          <option value="VIEWER" ${u.role === 'VIEWER' ? 'selected' : ''}>
-            VIEWER
-          </option>
-
-          <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>
-            MANAGER
-          </option>
-
-          <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>
-            ADMIN
-          </option>
-        </select>
+      <td
+        colspan="5"
+        style="
+          background:var(--surface-2);
+          font-weight:600;
+          font-size:12px;
+          text-transform:uppercase;
+          letter-spacing:.05em;
+          color:var(--ink-soft);
+        "
+      >
+        Demandes en attente (${pendingUsers.length})
       </td>
-
-      <td>
-        <select
-          class="filter"
-          id="status-${u.user_id}"
-        >
-          <option value="PENDING" ${u.status === 'PENDING' ? 'selected' : ''}>
-            PENDING
-          </option>
-
-          <option value="ACTIVE" ${u.status === 'ACTIVE' ? 'selected' : ''}>
-            ACTIVE
-          </option>
-
-          <option value="DISABLED" ${u.status === 'DISABLED' ? 'selected' : ''}>
-            DISABLED
-          </option>
-        </select>
-      </td>
-
-      <td>
-        <button
-          class="btn-primary"
-          onclick="saveAdminUser('${u.user_id}')"
-        >
-          Enregistrer
-        </button>
-      </td>
-
     </tr>
+  `;
 
-  `).join('');
+
+  if (pendingUsers.length) {
+
+    html += pendingUsers
+      .map(userRow)
+      .join('');
+
+  } else {
+
+    html += `
+      <tr>
+        <td
+          colspan="5"
+          style="
+            text-align:center;
+            color:var(--ink-faint);
+            padding:18px;
+          "
+        >
+          Aucune demande en attente
+        </td>
+      </tr>
+    `;
+  }
+
+
+  // ----- EXISTING USERS -----
+
+  html += `
+    <tr>
+      <td
+        colspan="5"
+        style="
+          background:var(--surface-2);
+          font-weight:600;
+          font-size:12px;
+          text-transform:uppercase;
+          letter-spacing:.05em;
+          color:var(--ink-soft);
+        "
+      >
+        Utilisateurs (${existingUsers.length})
+      </td>
+    </tr>
+  `;
+
+
+  if (existingUsers.length) {
+
+    html += existingUsers
+      .map(userRow)
+      .join('');
+
+  } else {
+
+    html += `
+      <tr>
+        <td
+          colspan="5"
+          style="
+            text-align:center;
+            color:var(--ink-faint);
+            padding:18px;
+          "
+        >
+          Aucun utilisateur actif
+        </td>
+      </tr>
+    `;
+  }
+
+
+  body.innerHTML = html;
 }
 
 
@@ -1644,18 +1775,8 @@ function updateApprovalProgress(){
    which triggers PDF generation + Gmail send + row creation server-side. */
 async function submitApprovalDecisions() {
 
-  const poStatusUrl = $('webhookUrl').value.trim();
-
-  if (!poStatusUrl) {
-    toast("Aucune connexion n8n configurée.");
-    return;
-  }
-
-  // Build the submit-approvals URL from the existing po-status URL
-  const submitUrl = poStatusUrl.replace(
-    /\/po-status\/?$/,
-    '/submit-approvals'
-  );
+  const submitUrl =
+    `${N8N_BASE}/submit-approvals`;
 
   // Prepare decisions for n8n
   const decisions = APPROVAL_BATCH
@@ -1767,17 +1888,8 @@ function renderExceptions(){
    which updates purchase_order_status and sends the confirmation e-mail. */
 async function resolveException(poNumber, action) {
 
-  const poStatusUrl = $('webhookUrl').value.trim();
-
-  if (!poStatusUrl) {
-    toast("Aucune connexion n8n configurée.");
-    return;
-  }
-
-  const resolveUrl = poStatusUrl.replace(
-    /\/po-status\/?$/,
-    '/resolve-exception'
-  );
+  const resolveUrl =
+    `${N8N_BASE}/resolve-exception`;
 
   const d = DATA.find(x => x.po_number === poNumber);
 
@@ -1856,9 +1968,8 @@ function updateSourcePill(){
 }
 
 async function connectToWebhook(){
-  const url = $('webhookUrl').value.trim();
+  const url = `${N8N_BASE}/po-status`;
   const statusEl = $('settingsStatus');
-  if(!url){ statusEl.innerHTML = '<div class="status-msg err">Merci de renseigner une URL.</div>'; return; }
   statusEl.innerHTML = '<div class="status-msg" style="background:var(--surface-2); color:var(--ink-soft);">Connexion en cours…</div>';
   try{
       const res = await fetch(url, {
@@ -1931,8 +2042,14 @@ function wireEvents(){
   $('connectBtn').addEventListener('click', connectToWebhook);
   $('disconnectBtn').addEventListener('click', disconnectWebhook);
   $('refreshBtn').addEventListener('click', ()=>{
-    if(USING_LIVE && $('webhookUrl').value.trim()){ connectToWebhook(); }
-    else { renderKpis(); renderTable(); renderExceptions(); renderApprovals(); }
+    connectToWebhook();
+  
+    if (
+      currentUser &&
+      currentUser.role === 'ADMIN'
+    ) {
+      loadAdminUsers();
+    }
   });
 }
 
