@@ -610,6 +610,14 @@
   <button class="tab-btn active" data-tab="overview">Vue d'ensemble</button>
   <button class="tab-btn" data-tab="approvals">Recommandations IA <span class="tab-count" id="tabCountApprovals">0</span></button>
   <button class="tab-btn" data-tab="exceptions">Exceptions <span class="tab-count alert" id="tabCountExceptions">0</span></button>
+  <button
+    class="tab-btn"
+    data-tab="admin"
+    id="adminTabBtn"
+    style="display:none;"
+  >
+    Administration
+  </button>
 </div>
 
 <div class="wrap">
@@ -670,6 +678,46 @@
     </div>
     <div class="table-card item-list" id="exceptionsList"></div>
   </div>
+
+
+  <!-- ================= ADMINISTRATION ================= -->
+  <div class="view" id="view-admin">
+  
+    <div class="banner">
+      <div>
+        <b>Administration des utilisateurs.</b>
+        Approuvez les comptes, modifiez les rôles ou désactivez les accès.
+      </div>
+    </div>
+  
+    <div class="table-card">
+  
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Email</th>
+            <th>Rôle</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+  
+        <tbody id="adminUsersBody"></tbody>
+      </table>
+  
+      <div
+        class="empty-state"
+        id="adminUsersEmpty"
+        style="display:none;"
+      >
+        <p>Aucun utilisateur.</p>
+      </div>
+  
+    </div>
+  
+  </div>
+  
 
 </div>
 
@@ -991,6 +1039,10 @@ function enterApp() {
   applyRoleVisibility();
 
   init();
+  
+  if (currentUser.role === 'ADMIN') {
+    loadAdminUsers();
+  }
 }
 
 document
@@ -1013,6 +1065,11 @@ function applyRoleVisibility() {
     currentUser.role === 'ADMIN' ||
     currentUser.role === 'MANAGER';
 
+  const isAdmin = currentUser.role === 'ADMIN';
+
+  document.getElementById('adminTabBtn').style.display =
+    isAdmin ? '' : 'none';
+
   document.getElementById('approvalsBannerNote').textContent =
     canModify
       ? 'Approuvez ou déclinez chaque matière ; les matières approuvées génèrent automatiquement un bon de commande.'
@@ -1030,6 +1087,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     this.classList.add('active');
     const tab = this.dataset.tab;
+    if (tab === 'admin' && currentUser.role === 'ADMIN') {
+      loadAdminUsers();
+    }
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+tab).classList.add('active');
   });
@@ -1338,6 +1398,181 @@ async function loadRecommendations() {
     console.error('Failed to load recommendations:', err);
     APPROVAL_BATCH = [];
     renderApprovals();
+  }
+}
+
+let ADMIN_USERS = [];
+
+async function loadAdminUsers() {
+
+  if (!currentUser || currentUser.role !== 'ADMIN') {
+    return;
+  }
+
+  try {
+
+    const res = await fetch(`${AUTH_BASE}/admin-users`, {
+      method: 'GET',
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error('HTTP ' + res.status);
+    }
+
+    ADMIN_USERS = await res.json();
+
+    renderAdminUsers();
+
+  } catch (err) {
+
+    console.error('Failed to load admin users:', err);
+
+    ADMIN_USERS = [];
+
+    renderAdminUsers();
+  }
+}
+
+
+function renderAdminUsers() {
+
+  const body =
+    document.getElementById('adminUsersBody');
+
+  const empty =
+    document.getElementById('adminUsersEmpty');
+
+  if (!body || !empty) {
+    return;
+  }
+
+  if (!ADMIN_USERS.length) {
+
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  body.innerHTML = ADMIN_USERS.map(u => `
+
+    <tr>
+
+      <td>${u.name || '—'}</td>
+
+      <td>${u.email || '—'}</td>
+
+      <td>
+        <select
+          class="filter"
+          id="role-${u.user_id}"
+        >
+          <option value="VIEWER" ${u.role === 'VIEWER' ? 'selected' : ''}>
+            VIEWER
+          </option>
+
+          <option value="MANAGER" ${u.role === 'MANAGER' ? 'selected' : ''}>
+            MANAGER
+          </option>
+
+          <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>
+            ADMIN
+          </option>
+        </select>
+      </td>
+
+      <td>
+        <select
+          class="filter"
+          id="status-${u.user_id}"
+        >
+          <option value="PENDING" ${u.status === 'PENDING' ? 'selected' : ''}>
+            PENDING
+          </option>
+
+          <option value="ACTIVE" ${u.status === 'ACTIVE' ? 'selected' : ''}>
+            ACTIVE
+          </option>
+
+          <option value="DISABLED" ${u.status === 'DISABLED' ? 'selected' : ''}>
+            DISABLED
+          </option>
+        </select>
+      </td>
+
+      <td>
+        <button
+          class="btn-primary"
+          onclick="saveAdminUser('${u.user_id}')"
+        >
+          Enregistrer
+        </button>
+      </td>
+
+    </tr>
+
+  `).join('');
+}
+
+
+async function saveAdminUser(userId) {
+
+  const roleEl =
+    document.getElementById(`role-${userId}`);
+
+  const statusEl =
+    document.getElementById(`status-${userId}`);
+
+  if (!roleEl || !statusEl) {
+    return;
+  }
+
+  const role = roleEl.value;
+  const status = statusEl.value;
+
+  try {
+
+    const res = await fetch(
+      `${AUTH_BASE}/admin-update-user`,
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+
+        body: JSON.stringify({
+          user_id: userId,
+          role,
+          status
+        })
+      }
+    );
+
+    const result = await res.json();
+
+    if (!result.success) {
+      throw new Error(
+        result.message || 'Mise à jour impossible'
+      );
+    }
+
+    alert('Utilisateur mis à jour.');
+
+    await loadAdminUsers();
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert(
+      "Erreur lors de la mise à jour de l'utilisateur."
+    );
   }
 }
 
