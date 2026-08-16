@@ -814,6 +814,145 @@ document
   });
 
 
+/* ============ Real signup through n8n ============ */
+
+document
+  .getElementById('signupForm')
+  .addEventListener('submit', async function(e) {
+
+    e.preventDefault();
+
+    const name =
+      document.getElementById('signupName').value.trim();
+
+    const email =
+      document.getElementById('signupEmail').value
+        .trim()
+        .toLowerCase();
+
+    const password =
+      document.getElementById('signupPassword').value;
+
+    const passwordConfirm =
+      document.getElementById('signupPasswordConfirm').value;
+
+    const errorEl =
+      document.getElementById('signupError');
+
+    const successEl =
+      document.getElementById('signupSuccess');
+
+    const submitBtn =
+      document.getElementById('signupSubmitBtn');
+
+
+    // Reset messages
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+
+    // Basic validation
+    if (!name || !email || !password || !passwordConfirm) {
+
+      errorEl.textContent =
+        "Merci de remplir tous les champs.";
+
+      errorEl.style.display = 'block';
+
+      return;
+    }
+
+
+    if (password.length < 8) {
+
+      errorEl.textContent =
+        "Le mot de passe doit contenir au moins 8 caractères.";
+
+      errorEl.style.display = 'block';
+
+      return;
+    }
+
+
+    if (password !== passwordConfirm) {
+
+      errorEl.textContent =
+        "Les deux mots de passe ne correspondent pas.";
+
+      errorEl.style.display = 'block';
+
+      return;
+    }
+
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Création en cours…";
+
+
+    try {
+
+      const res = await fetch(`${AUTH_BASE}/auth-signup`, {
+
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+
+        body: JSON.stringify({
+          name,
+          email,
+          password
+        })
+
+      });
+
+
+      const result = await res.json();
+
+
+      if (!result.success) {
+
+        errorEl.textContent =
+          result.message ||
+          "Impossible de créer le compte.";
+
+        errorEl.style.display = 'block';
+
+        return;
+      }
+
+
+      document.getElementById('signupForm').reset();
+
+      successEl.textContent =
+        result.message ||
+        "Compte créé. Votre accès doit maintenant être approuvé par un administrateur.";
+
+      successEl.style.display = 'block';
+
+
+    } catch (err) {
+
+      console.error("Signup error:", err);
+
+      errorEl.textContent =
+        "Impossible de contacter le serveur d'authentification.";
+
+      errorEl.style.display = 'block';
+
+
+    } finally {
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Créer mon compte";
+
+    }
+
+  });
+
+
 function enterApp() {
 
   document.getElementById('loginScreen').style.display = 'none';
