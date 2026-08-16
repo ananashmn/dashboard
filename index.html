@@ -1025,14 +1025,8 @@ function enterApp() {
   document.getElementById('userName').textContent =
     currentUser.name;
 
-  const roleLabels = {
-    ADMIN: 'Administrateur',
-    MANAGER: 'Responsable achats',
-    VIEWER: 'Employé — lecture seule'
-  };
-
   document.getElementById('userRole').textContent =
-    roleLabels[currentUser.role] || currentUser.role;
+    currentUser.role;
 
   const canModify =
     currentUser.role === 'ADMIN' ||
@@ -1843,14 +1837,21 @@ async function submitApprovalDecisions() {
 
 /* ============ Exceptions (delay / modification / unclear needing a decision) ============ */
 function renderExceptions(){
-  const open = DATA.filter(d => ['DELAY','MODIFICATION_REQUESTED','UNCLEAR'].includes(d.response_status) && !d.exception_decision);
-  const resolved = DATA.filter(d => ['DELAY','MODIFICATION_REQUESTED','UNCLEAR'].includes(d.response_status) && d.exception_decision);
+  const open = DATA.filter(
+    d =>
+      ['DELAY','MODIFICATION_REQUESTED','UNCLEAR'].includes(d.response_status)
+      && !d.exception_decision
+  );
+  
   const tabCount = $('tabCountExceptions');
   tabCount.textContent = open.length;
-  tabCount.classList.toggle('alert', open.length>0);
-
-  const isManager = currentUser.role === 'manager';
-  const all = [...open, ...resolved];
+  tabCount.classList.toggle('alert', open.length > 0);
+  
+  const canModify =
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MANAGER';
+  
+  const all = open;
   const list = $('exceptionsList');
   if(all.length===0){
     list.innerHTML = `<div class="empty-state"><p>Aucune exception en attente.</p></div>`;
@@ -1862,7 +1863,7 @@ function renderExceptions(){
         <div class="row-title">${d.material} — ${d.supplier_name} <span class="po-cell mono" style="font-size:11.5px;color:var(--ink-faint);">${d.po_number}</span></div>
         <div class="row-sub"><span class="badge b-${d.response_status}">${STATUS_LABEL[d.response_status]}</span></div>
         <div class="reason-box">${d.reason || 'Aucun détail fourni par le fournisseur.'}</div>
-        ${!d.exception_decision ? (isManager ? `
+        ${!d.exception_decision ? (canModify ? `
         <div class="exc-actions">
           <button class="btn-ok" data-po="${d.po_number}" data-action="accept">Accepter — sans impact production</button>
           <button class="btn-bad" data-po="${d.po_number}" data-action="decline">Décliner</button>
@@ -1875,7 +1876,7 @@ function renderExceptions(){
     </div>
   `).join('');
 
-  if(isManager){
+  if(canModify){
     document.querySelectorAll('.exc-actions button[data-po]').forEach(btn=>{
       btn.addEventListener('click', function(){
         resolveException(this.dataset.po, this.dataset.action);
