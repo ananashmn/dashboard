@@ -420,13 +420,7 @@
         <label for="loginPassword">Mot de passe</label>
         <input type="password" id="loginPassword" placeholder="••••••••" required>
       </div>
-      <div class="field">
-        <label for="loginRole">Rôle</label>
-        <select id="loginRole">
-          <option value="manager">Responsable achats — décisions et approbations</option>
-          <option value="employee">Employé — consultation seule</option>
-        </select>
-      </div>
+
       <button type="submit" class="btn-primary">Se connecter</button>
     </form>
     <p class="login-hint">Prototype : toute combinaison e-mail / mot de passe est acceptée. À remplacer par l'authentification réelle (n8n Basic/Header Auth) avant mise en production.</p>
@@ -569,48 +563,150 @@
 <script>
 /* ============ Auth (prototype) ============ */
 let currentUser = null;
+  const savedUser = sessionStorage.getItem('michocUser');
 
-document.getElementById('loginForm').addEventListener('submit', function(e){
+if (savedUser) {
+  try {
+    currentUser = JSON.parse(savedUser);
+  } catch {
+    sessionStorage.removeItem('michocUser');
+  }
+}
+
+const AUTH_BASE =
+  "https://juggling-sharply-body.ngrok-free.dev/webhook";
+
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
+
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  const role = document.getElementById('loginRole').value;
-  if(!email || !password){
-    document.getElementById('loginError').style.display = 'block';
+
+  const errorEl = document.getElementById('loginError');
+
+  if (!email || !password) {
+    errorEl.textContent = "Merci de renseigner un e-mail et un mot de passe.";
+    errorEl.style.display = 'block';
     return;
   }
-  document.getElementById('loginError').style.display = 'none';
-  currentUser = { name: email.split('@')[0].replace(/[._]/g,' '), role };
-  enterApp();
+
+  errorEl.style.display = 'none';
+
+  try {
+
+    const res = await fetch(`${AUTH_BASE}/auth-login`, {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+
+      body: JSON.stringify({
+        email: email,
+        password: password
+      })
+    });
+
+    const result = await res.json();
+
+    if (!result.success) {
+      errorEl.textContent =
+        result.message || "Connexion impossible.";
+
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    currentUser = result.user;
+
+    sessionStorage.setItem(
+      'michocUser',
+      JSON.stringify(currentUser)
+    );
+
+    enterApp();
+
+  } catch (err) {
+
+    console.error(err);
+
+    errorEl.textContent =
+      "Impossible de contacter le serveur d'authentification.";
+
+    errorEl.style.display = 'block';
+  }
 });
 
-function enterApp(){
+function enterApp() {
+
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appRoot').style.display = 'block';
-  const initials = currentUser.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) || 'U';
+
+  const initials = currentUser.name
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'U';
+
   document.getElementById('userAvatar').textContent = initials;
-  document.getElementById('userName').textContent = currentUser.name.replace(/\b\w/g,c=>c.toUpperCase());
-  document.getElementById('userRole').textContent = currentUser.role==='manager' ? 'Responsable achats' : 'Employé';
-  document.body.classList.toggle('is-employee', currentUser.role!=='manager');
+
+  document.getElementById('userName').textContent =
+    currentUser.name;
+
+  const roleLabels = {
+    ADMIN: 'Administrateur',
+    MANAGER: 'Responsable achats',
+    VIEWER: 'Employé — lecture seule'
+  };
+
+  document.getElementById('userRole').textContent =
+    roleLabels[currentUser.role] || currentUser.role;
+
+  const canModify =
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MANAGER';
+
+  document.body.classList.toggle(
+    'is-employee',
+    !canModify
+  );
+
   applyRoleVisibility();
+
   init();
 }
 
-document.getElementById('logoutBtn').addEventListener('click', function(){
-  currentUser = null;
-  document.getElementById('appRoot').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('loginForm').reset();
-});
+document
+  .getElementById('logoutBtn')
+  .addEventListener('click', function() {
 
-function applyRoleVisibility(){
-  const isManager = currentUser.role === 'manager';
-  document.getElementById('approvalsBannerNote').textContent = isManager
-    ? 'Approuvez ou déclinez chaque matière ; les matières approuvées génèrent automatiquement un bon de commande.'
-    : "Décisions réservées au responsable achats. Vous consultez l'état des recommandations en lecture seule.";
-  document.getElementById('exceptionsBannerNote').textContent = isManager
-    ? 'Une décision déclenche automatiquement un e-mail de confirmation au fournisseur.'
-    : 'Décisions réservées au responsable achats.';
+    currentUser = null;
+
+    sessionStorage.removeItem('michocUser');
+
+    document.getElementById('appRoot').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+
+    document.getElementById('loginForm').reset();
+  });
+
+function applyRoleVisibility() {
+
+  const canModify =
+    currentUser.role === 'ADMIN' ||
+    currentUser.role === 'MANAGER';
+
+  document.getElementById('approvalsBannerNote').textContent =
+    canModify
+      ? 'Approuvez ou déclinez chaque matière ; les matières approuvées génèrent automatiquement un bon de commande.'
+      : "Décisions réservées au responsable achats. Vous consultez les recommandations en lecture seule.";
+
+  document.getElementById('exceptionsBannerNote').textContent =
+    canModify
+      ? 'Une décision déclenche automatiquement un e-mail de confirmation au fournisseur.'
+      : 'Décisions réservées au responsable achats.';
 }
 
 /* ============ Tabs ============ */
@@ -1300,6 +1396,12 @@ function init(){
   renderExceptions();
   updateSourcePill();
 }
+  
+/* Restore logged-in user after page refresh */
+if (currentUser) {
+  enterApp();
+}
+
 </script>
 </body>
 </html>
