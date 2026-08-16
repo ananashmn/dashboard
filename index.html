@@ -1233,7 +1233,40 @@ function renderTable(){
       <td class="num" data-label="Qté">${d.quantity.toLocaleString('fr-FR')}</td>
       <td data-label="Date requise">${fmtDate(d.required_date)}</td>
       <td class="${d.confirmed_delivery_date?'':'muted'}" data-label="Date confirmée">${fmtDate(d.confirmed_delivery_date)}</td>
-      <td data-label="Statut"><span class="badge b-${status}">${STATUS_LABEL[status]||status}</span></td>
+      <td data-label="Statut">
+
+        <span class="badge b-${status}">
+          ${STATUS_LABEL[status]}
+        </span>
+      
+        ${
+          d.exception_decision
+            ? `
+              <div
+                style="
+                  margin-top:5px;
+                  font-size:11px;
+                  color:var(--ink-soft);
+                "
+              >
+                ${
+                  d.exception_decision === 'accepted'
+                    ? '✓ Accepté'
+                    : '✕ Décliné'
+                }
+                par
+                ${d.exception_decided_by || 'Utilisateur'}
+                ${
+                  d.exception_decided_by_role
+                    ? `(${d.exception_decided_by_role})`
+                    : ''
+                }
+              </div>
+            `
+            : ''
+        }
+      
+      </td>
       <td data-label="Risque">${risk ? `<span class="risk-dot r-${risk}"><i></i>${RISK_LABEL[risk]}</span>` : `<span class="risk-dot r-none"><i></i>—</span>`}</td>
     </tr>`;
   }).join('');
@@ -1263,8 +1296,29 @@ function buildTimeline(d){
     stages[stages.length-1].current = !responded;
   }
   if(['DELAY','MODIFICATION_REQUESTED','UNCLEAR'].includes(d.response_status)){
-    if(d.exception_decision){
-      stages.push({label: d.exception_decision==='accepted' ? "Exception acceptée — e-mail envoyé" : "Exception déclinée — e-mail envoyé", date:d.decidedAt, done:true, current:true});
+    if (d.exception_decision) {
+    
+      const actor =
+        d.exception_decided_by
+          ? ` par ${d.exception_decided_by}`
+          : '';
+    
+      const actorRole =
+        d.exception_decided_by_role
+          ? ` (${d.exception_decided_by_role})`
+          : '';
+    
+      const label =
+        d.exception_decision === 'accepted'
+          ? `Exception acceptée${actor}${actorRole} — e-mail envoyé`
+          : `Exception déclinée${actor}${actorRole} — e-mail envoyé`;
+    
+      stages.push({
+        label,
+        date: d.decidedAt,
+        done: true,
+        current: true
+      });
     } else {
       stages.push({label:"En attente de décision (responsable achats)", date:null, done:false});
     }
@@ -1911,7 +1965,10 @@ async function resolveException(poNumber, action) {
 
       body: JSON.stringify({
         po_number: poNumber,
-        action: action
+        action: action,
+
+        decided_by: currentUser.name,
+        decided_by_role: currentUser.role
       })
     });
 
