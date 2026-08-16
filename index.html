@@ -40,10 +40,22 @@
   code, .mono{font-family:'IBM Plex Mono',monospace;}
 
   /* ---------- Login ---------- */
-  #loginScreen{
-    min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:var(--ink); padding:24px;
-  }
+#loginScreen,
+#signupScreen{
+  min-height:100vh;
+  align-items:center;
+  justify-content:center;
+  background:var(--ink);
+  padding:24px;
+}
+
+#loginScreen{
+  display:flex;
+}
+
+#signupScreen{
+  display:none;
+}
   .login-card{
     width:100%;max-width:380px;background:var(--surface);border-radius:12px;
     padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,0.4);
@@ -423,9 +435,144 @@
 
       <button type="submit" class="btn-primary">Se connecter</button>
     </form>
-    <p class="login-hint">Prototype : toute combinaison e-mail / mot de passe est acceptée. À remplacer par l'authentification réelle (n8n Basic/Header Auth) avant mise en production.</p>
+    <p class="login-hint" style="text-align:center;">
+      Pas encore de compte ?
+      <button
+        type="button"
+        id="showSignupBtn"
+        style="
+          border:none;
+          background:none;
+          color:var(--brand);
+          cursor:pointer;
+          font-weight:600;
+          font-family:inherit;
+        "
+      >
+        Créer un compte
+      </button>
+    </p>
   </div>
 </div>
+
+
+<!-- ===================== SIGNUP ===================== -->
+<div id="signupScreen" style="display:none;">
+  <div class="login-card">
+
+    <div class="brand">
+      <div class="brand-mark">MC</div>
+      <div class="brand-text">
+        <h1 style="color:var(--ink);">MICHOC</h1>
+      </div>
+    </div>
+
+    <h1>Créer un compte</h1>
+
+    <p class="sub">
+      Créez votre compte. L'accès devra être approuvé
+      par un administrateur.
+    </p>
+
+    <div
+      class="login-error"
+      id="signupError"
+      style="display:none;"
+    ></div>
+
+    <div
+      id="signupSuccess"
+      style="
+        display:none;
+        background:var(--ok-soft);
+        color:var(--ok);
+        font-size:12.5px;
+        padding:10px 12px;
+        border-radius:7px;
+        margin-bottom:14px;
+        line-height:1.5;
+      "
+    ></div>
+
+    <form id="signupForm">
+
+      <div class="field">
+        <label for="signupName">Nom complet</label>
+        <input
+          type="text"
+          id="signupName"
+          placeholder="Prénom Nom"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="signupEmail">Adresse e-mail</label>
+        <input
+          type="email"
+          id="signupEmail"
+          placeholder="prenom.nom@michoc.ma"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="signupPassword">Mot de passe</label>
+        <input
+          type="password"
+          id="signupPassword"
+          placeholder="Minimum 8 caractères"
+          minlength="8"
+          required
+        >
+      </div>
+
+      <div class="field">
+        <label for="signupPasswordConfirm">
+          Confirmer le mot de passe
+        </label>
+
+        <input
+          type="password"
+          id="signupPasswordConfirm"
+          placeholder="Répétez votre mot de passe"
+          minlength="8"
+          required
+        >
+      </div>
+
+      <button
+        type="submit"
+        class="btn-primary"
+        id="signupSubmitBtn"
+      >
+        Créer mon compte
+      </button>
+
+    </form>
+
+    <p class="login-hint" style="text-align:center;">
+      Vous avez déjà un compte ?
+
+      <button
+        type="button"
+        id="backToLoginBtn"
+        style="
+          border:none;
+          background:none;
+          color:var(--brand);
+          cursor:pointer;
+          font-weight:600;
+          font-family:inherit;
+        "
+      >
+        Se connecter
+      </button>
+    </p>
+
+  </div>
+</div>
+
 
 <!-- ===================== APP ===================== -->
 <div id="appRoot">
@@ -637,6 +784,35 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     errorEl.style.display = 'block';
   }
 });
+
+
+
+/* ============ Login / Signup navigation ============ */
+
+document
+  .getElementById('showSignupBtn')
+  .addEventListener('click', function() {
+
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('signupScreen').style.display = 'flex';
+
+    document.getElementById('signupError').style.display = 'none';
+    document.getElementById('signupSuccess').style.display = 'none';
+  });
+
+
+document
+  .getElementById('backToLoginBtn')
+  .addEventListener('click', function() {
+
+    document.getElementById('signupScreen').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+
+    document.getElementById('signupForm').reset();
+    document.getElementById('signupError').style.display = 'none';
+    document.getElementById('signupSuccess').style.display = 'none';
+  });
+
 
 function enterApp() {
 
