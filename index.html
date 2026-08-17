@@ -616,6 +616,14 @@
   <button class="tab-btn" data-tab="approvals">Recommandations IA <span class="tab-count" id="tabCountApprovals">0</span></button>
   <button class="tab-btn" data-tab="exceptions">Exceptions <span class="tab-count alert" id="tabCountExceptions">0</span></button>
   <button
+  class="tab-btn"
+  data-tab="upload"
+  id="uploadTabBtn"
+  style="display:none;"
+  >
+    Importer les fichiers
+  </button>
+  <button
     class="tab-btn"
     data-tab="admin"
     id="adminTabBtn"
@@ -684,6 +692,101 @@
     <div class="table-card item-list" id="exceptionsList"></div>
   </div>
 
+  <!-- ================= FILE UPLOAD ================= -->
+  <div class="view" id="view-upload">
+
+    <div class="banner">
+      <div>
+        <b>Importer les données d'approvisionnement.</b>
+        Sélectionnez les quatre fichiers CSV puis lancez l'analyse automatique.
+      </div>
+    </div>
+
+    <div
+      class="table-card"
+      style="padding:24px;"
+    >
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:20px;
+        "
+      >
+
+        <div class="field">
+          <label for="uploadProductionOrders">
+            Ordres de production
+          </label>
+
+          <input
+            type="file"
+            id="uploadProductionOrders"
+            accept=".csv,text/csv"
+          >
+        </div>
+
+
+        <div class="field">
+          <label for="uploadBom">
+            BOM
+          </label>
+
+          <input
+            type="file"
+            id="uploadBom"
+            accept=".csv,text/csv"
+          >
+        </div>
+
+
+        <div class="field">
+          <label for="uploadStock">
+            Stock
+          </label>
+
+          <input
+            type="file"
+            id="uploadStock"
+            accept=".csv,text/csv"
+          >
+        </div>
+
+
+        <div class="field">
+          <label for="uploadSuppliers">
+            Fournisseurs
+          </label>
+
+          <input
+            type="file"
+            id="uploadSuppliers"
+            accept=".csv,text/csv"
+          >
+        </div>
+
+      </div>
+
+
+      <div style="margin-top:22px;">
+        <button
+          class="btn-primary"
+          id="startProcurementAnalysisBtn"
+        >
+          Lancer l'analyse
+        </button>
+      </div>
+
+
+      <div
+        id="uploadStatus"
+        style="margin-top:14px;"
+      ></div>
+
+    </div>
+
+  </div>
 
   <!-- ================= ADMINISTRATION ================= -->
   <div class="view" id="view-admin">
@@ -1070,6 +1173,9 @@ function applyRoleVisibility() {
     currentUser.role === 'MANAGER';
 
   const isAdmin = currentUser.role === 'ADMIN';
+
+  document.getElementById('uploadTabBtn').style.display =
+    canModify ? '' : 'none';
 
   document.getElementById('adminTabBtn').style.display =
     isAdmin ? '' : 'none';
@@ -2027,6 +2133,182 @@ function updateSourcePill(){
   }
 }
 
+
+/* ============ Upload procurement CSV files ============ */
+
+async function uploadProcurementFiles() {
+
+  const productionOrders =
+    $('uploadProductionOrders').files[0];
+
+  const bom =
+    $('uploadBom').files[0];
+
+  const stock =
+    $('uploadStock').files[0];
+
+  const suppliers =
+    $('uploadSuppliers').files[0];
+
+  const statusEl =
+    $('uploadStatus');
+
+  const btn =
+    $('startProcurementAnalysisBtn');
+
+
+  // Security in the UI
+  const canModify =
+    currentUser &&
+    (
+      currentUser.role === 'ADMIN' ||
+      currentUser.role === 'MANAGER'
+    );
+
+  if (!canModify) {
+
+    statusEl.innerHTML =
+      '<div class="status-msg err">Vous n’avez pas l’autorisation de lancer une analyse.</div>';
+
+    return;
+  }
+
+
+  // Require all four files
+  if (
+    !productionOrders ||
+    !bom ||
+    !stock ||
+    !suppliers
+  ) {
+
+    statusEl.innerHTML =
+      '<div class="status-msg err">Veuillez sélectionner les quatre fichiers CSV.</div>';
+
+    return;
+  }
+
+
+  const formData =
+    new FormData();
+
+
+  /*
+    IMPORTANT:
+    These names must match the binary property names
+    configured in your four n8n Extract from File nodes.
+  */
+
+  formData.append(
+    'production_orders',
+    productionOrders
+  );
+
+  formData.append(
+    'bom',
+    bom
+  );
+
+  formData.append(
+    'stock',
+    stock
+  );
+
+  formData.append(
+    'suppliers',
+    suppliers
+  );
+
+
+  btn.disabled = true;
+  btn.textContent = 'Analyse en cours…';
+
+  statusEl.innerHTML =
+    '<div class="status-msg">Envoi des fichiers vers n8n…</div>';
+
+
+  try {
+
+    const res = await fetch(
+      `${N8N_BASE}/procurement-upload`,
+      {
+        method: 'POST',
+
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        },
+
+        body: formData
+      }
+    );
+
+
+    if (!res.ok) {
+
+      const bodyText =
+        await res.text();
+
+      throw new Error(
+        `HTTP ${res.status} ${bodyText}`
+      );
+    }
+
+
+    statusEl.innerHTML =
+      '<div class="status-msg ok">Fichiers reçus par n8n. Analyse en cours…</div>';
+
+
+    /*
+      Wait a few seconds for:
+      calculations
+      → loop
+      → AI
+      → Save Recommendation
+    */
+
+    setTimeout(async () => {
+
+      try {
+
+        await loadRecommendations();
+
+        const count =
+          APPROVAL_BATCH.length;
+
+        statusEl.innerHTML =
+          `<div class="status-msg ok">Analyse terminée — ${count} recommandation(s) chargée(s).</div>`;
+
+      } catch (err) {
+
+        console.error(
+          'Recommendation reload failed:',
+          err
+        );
+
+      }
+
+    }, 6000);
+
+
+  } catch (err) {
+
+    console.error(
+      'Procurement upload failed:',
+      err
+    );
+
+    statusEl.innerHTML =
+      `<div class="status-msg err">Échec de l'envoi : ${err.message}</div>`;
+
+  } finally {
+
+    btn.disabled = false;
+    btn.textContent =
+      "Lancer l'analyse";
+  }
+}
+
+
 async function connectToWebhook(){
   const url = `${N8N_BASE}/po-status`;
   const statusEl = $('settingsStatus');
@@ -2087,6 +2369,11 @@ function disconnectWebhook(){
 
 /* ============ Wire up events ============ */
 function wireEvents(){
+  $('startProcurementAnalysisBtn')
+    .addEventListener(
+      'click',
+      uploadProcurementFiles
+    );
   $('searchInput').addEventListener('input', renderTable);
   $('statusFilter').addEventListener('change', ()=>{ activeStatusFilterFromKpi = $('statusFilter').value; renderKpis(); renderTable(); });
   $('riskFilter').addEventListener('change', renderTable);
